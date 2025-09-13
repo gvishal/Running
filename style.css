@@ -1,0 +1,51 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  background: #f9f9f9;
+}
+main {
+  max-width: 600px;
+  margin: auto;
+  padding: 1em;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+h1, h2 {
+  color: #2b3d4f;
+}
+label {
+  display: block;
+  margin: 1em 0 0.5em;
+}
+input, select, button {
+  font-size: 1em;
+  padding: 0.4em;
+  margin-top: 0.2em;
+}
+#product-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+.product-checkbox {
+  background: #f0f6fa;
+  border: 1px solid #d1e3f3;
+  border-radius: 4px;
+  padding: 0.5em 1em;
+  margin-bottom: 0.5em;
+}
+button {
+  margin: 1em 0;
+  background: #2b3d4f;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+button:active {
+  background: #234;
+}
+#plan-details {
+  margin-top: 1em;
+}
