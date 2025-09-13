@@ -4,7 +4,7 @@ body {
   background: #f9f9f9;
 }
 main {
-  max-width: 600px;
+  max-width: 700px;
   margin: auto;
   padding: 1em;
   background: #fff;
@@ -23,17 +23,32 @@ input, select, button {
   padding: 0.4em;
   margin-top: 0.2em;
 }
-#product-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1em;
+#product-select {
+  width: 100%;
+  margin: 0.5em 0 1em 0;
+  min-height: 7em;
 }
-.product-checkbox {
-  background: #f0f6fa;
-  border: 1px solid #d1e3f3;
-  border-radius: 4px;
-  padding: 0.5em 1em;
-  margin-bottom: 0.5em;
+#product-info {
+  font-size: 0.95em;
+  color: #444;
+  margin-bottom: 1em;
+}
+.products-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.5em;
+}
+.products-table th, .products-table td {
+  border: 1px solid #e2e2e2;
+  padding: 0.3em 0.5em;
+  text-align: left;
+  font-size: 0.96em;
+}
+.products-table th {
+  background: #f7fafe;
+}
+.products-table tr:nth-child(even) {
+  background: #f9f9fc;
 }
 button {
   margin: 1em 0;
@@ -42,10 +57,15 @@ button {
   border: none;
   border-radius: 3px;
   cursor: pointer;
+  transition: background 0.2s;
 }
-button:active {
+button:hover, button:focus {
   background: #234;
 }
 #plan-details {
   margin-top: 1em;
+}
+footer {
+  margin-top: 2em;
+  text-align: center;
 }
