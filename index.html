@@ -27,6 +27,25 @@
             background-position: right .7em top 50%, 0 0;
             background-size: .65em auto, 100%;
         }
+        /* Styles for AI-generated content for better mobile readability */
+        #planContent h3 {
+            @apply text-xl font-semibold text-gray-700 mb-3 border-b pb-2;
+        }
+        #planContent ul {
+            @apply list-disc list-inside space-y-2 mt-2 pl-2;
+        }
+        #planContent table {
+            @apply w-full text-sm text-left text-gray-500 mt-2;
+        }
+        #planContent thead {
+             @apply text-xs text-gray-700 uppercase bg-gray-50;
+        }
+        #planContent th, #planContent td {
+            @apply px-4 py-3;
+        }
+        #planContent tbody tr {
+             @apply bg-white border-b;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -151,7 +170,7 @@
                 <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16"></div>
                 <p class="ml-4 text-gray-600">Generating AI plan... this may take a moment.</p>
             </div>
-            <div id="planContent">
+            <div id="planContent" class="space-y-6">
                 <!-- Content will be populated by JS -->
             </div>
         </div>
@@ -220,12 +239,20 @@
         // --- INITIALIZATION ---
         function init() {
             populateProducts();
+            loadApiKey();
             el.products.addEventListener('change', updateSelectedProductsTable);
             el.getLocationBtn.addEventListener('click', getUserLocation);
             el.getWeatherBtn.addEventListener('click', fetchWeather);
             el.generateHeuristicBtn.addEventListener('click', () => generatePlan('heuristic'));
             el.generateAIBtn.addEventListener('click', () => generatePlan('ai'));
             el.copyPlanBtn.addEventListener('click', copyPlanToClipboard);
+        }
+        
+        function loadApiKey() {
+            const savedApiKey = localStorage.getItem('marathonPlannerApiKey');
+            if (savedApiKey) {
+                el.apiKey.value = savedApiKey;
+            }
         }
 
         function populateProducts() {
@@ -277,13 +304,16 @@
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude
                     };
-                    // Also update the location input field for user feedback
                     el.location.value = 'Current Location';
                     fetchWeather();
-                }, () => {
+                }, (error) => {
                     let msg = 'Unable to retrieve your location. Please enter it manually.';
-                    if (window.location.protocol === 'file:') {
-                        msg += ' (Note: Location access is often blocked on local files.)';
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                    if (window.location.protocol !== 'https:') {
+                         msg += ' For best results, please use a secure (https) connection.';
+                    }
+                    if (isIOS) {
+                        msg += ' Check Settings > Privacy > Location Services to ensure Safari has access.';
                     }
                     el.weatherResult.textContent = msg;
                 });
@@ -296,92 +326,71 @@
             el.weatherResult.textContent = 'Fetching weather...';
             let lat, lon;
 
-            // If user types a new location after getting current location, reset coords to force a new search
-            if (document.activeElement === el.getWeatherBtn && el.location.value !== 'Current Location') {
-                coords = null;
+            if (el.location.value === 'Current Location' && !coords) {
+                 el.weatherResult.textContent = 'Could not determine current location. Please enter a location manually.';
+                 return;
             }
 
-            if (coords) {
+            if (coords && el.location.value === 'Current Location') {
                 lat = coords.latitude;
                 lon = coords.longitude;
-            } else if (el.location.value && el.location.value !== 'Current Location') {
+            } else if (el.location.value) {
                 try {
                     const geoResponse = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(el.location.value)}&count=1`);
                     const geoData = await geoResponse.json();
-
                     if (geoData.error) {
-                        el.weatherResult.textContent = `Geocoding Error: ${geoData.reason}`;
-                        return;
+                        el.weatherResult.textContent = `Geocoding Error: ${geoData.reason}`; return;
                     }
                     if (!geoData.results || geoData.results.length === 0) {
-                        el.weatherResult.textContent = 'Could not find location. Please be more specific.';
-                        return;
+                        el.weatherResult.textContent = 'Could not find location. Please be more specific.'; return;
                     }
                     lat = geoData.results[0].latitude;
                     lon = geoData.results[0].longitude;
                     coords = { latitude: lat, longitude: lon };
                 } catch (error) {
                     console.error('Geocoding fetch error:', error);
-                    el.weatherResult.textContent = 'Error fetching location data. Check your network connection and try again.';
-                    return;
+                    el.weatherResult.textContent = 'Error fetching location data. Check network connection.'; return;
                 }
             } else {
-                el.weatherResult.textContent = 'Please enter a location or allow location access first.';
-                return;
+                el.weatherResult.textContent = 'Please enter a location or allow location access.'; return;
             }
 
             const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m`;
             try {
                 const response = await fetch(apiUrl);
                 const data = await response.json();
-
                 if (data.error) {
-                    el.weatherResult.textContent = `Weather API Error: ${data.reason}`;
-                    weatherData = null;
-                    return;
+                    el.weatherResult.textContent = `Weather API Error: ${data.reason}`; weatherData = null; return;
                 }
-
                 if (!data.current || typeof data.current.temperature_2m === 'undefined') {
-                     el.weatherResult.textContent = 'Weather data structure is unexpected. Could not retrieve current conditions.';
-                     weatherData = null;
-                     return;
+                     el.weatherResult.textContent = 'Unexpected weather data format.'; weatherData = null; return;
                 }
-
                 weatherData = {
                     temp: data.current.temperature_2m,
                     humidity: data.current.relative_humidity_2m,
                 };
-                
                 const locationName = el.location.value || 'your location';
-                el.weatherResult.innerHTML = `
-                    <strong>Current Weather in ${locationName}:</strong> 
-                    Temperature: ${weatherData.temp}°C, 
-                    Humidity: ${weatherData.humidity}%
-                `;
+                el.weatherResult.innerHTML = `<strong>Current Weather in ${locationName}:</strong> Temperature: ${weatherData.temp}°C, Humidity: ${weatherData.humidity}%`;
             } catch (error) {
                 console.error('Weather fetch error:', error);
-                el.weatherResult.textContent = 'Failed to fetch weather data. Check your network connection and try again.';
+                el.weatherResult.textContent = 'Failed to fetch weather data. Check network connection.';
                 weatherData = null;
             }
         }
 
-
         // --- PLAN GENERATION ---
         function generatePlan(type) {
-             const selectedProducts = Array.from(el.products.selectedOptions).map(opt => ({
-                name: opt.value,
-                ...productsData[opt.value]
-            }));
-
+             const selectedProducts = Array.from(el.products.selectedOptions).map(opt => ({ name: opt.value, ...productsData[opt.value] }));
             if (selectedProducts.length === 0) {
-                alert("Please select at least one nutrition product.");
-                return;
+                alert("Please select at least one nutrition product."); return;
             }
-
             if (type === 'ai' && !el.apiKey.value) {
-                alert("Please enter your Gemini API Key to generate a plan with AI.");
-                el.apiKey.focus();
-                return;
+                alert("Please enter your Gemini API Key to generate a plan with AI."); el.apiKey.focus(); return;
+            }
+            
+            const apiKey = el.apiKey.value;
+            if(apiKey){
+                localStorage.setItem('marathonPlannerApiKey', apiKey);
             }
 
             const inputs = {
@@ -394,7 +403,7 @@
                 weather: weatherData,
                 products: selectedProducts,
                 location: el.location.value,
-                apiKey: el.apiKey.value,
+                apiKey: apiKey,
             };
 
             if(type === 'heuristic') {
@@ -406,61 +415,40 @@
         }
 
         function generateHeuristicPlan(inputs) {
-            // Calculations
             const [paceMinutes, paceSeconds] = inputs.pace.split(':').map(Number);
             const paceInMinutes = paceMinutes + paceSeconds / 60;
             const totalTimeMinutes = inputs.distance * paceInMinutes;
             const totalTimeHours = totalTimeMinutes / 60;
-
             const distanceKm = inputs.unit === 'miles' ? inputs.distance * 1.60934 : inputs.distance;
-
-            // Simple needs estimation
-            const carbNeedsPerHour = Math.min(90, Math.max(30, 1.2 * inputs.weight));
-            const totalCarbNeeds = carbNeedsPerHour * totalTimeHours;
-            const sodiumNeedsPerHour = (inputs.weather && inputs.weather.temp > 20) ? 700 : 400;
-            const totalSodiumNeeds = sodiumNeedsPerHour * totalTimeHours;
-            const fluidNeedsPerHour = (inputs.weather && inputs.weather.temp > 20) ? 750 : 500; // in ml
+            const fluidNeedsPerHour = (inputs.weather && inputs.weather.temp > 20) ? 750 : 500;
             const totalFluidNeeds = fluidNeedsPerHour * totalTimeHours;
-
-            // Planning
             let nutritionPlan = [];
             const fuelProducts = inputs.products.filter(p => p.carbs > 5 && (p.name.toLowerCase().includes('gel') || p.name.toLowerCase().includes('chew')));
             const electrolyteProducts = inputs.products.filter(p => p.sodium > 150 && (p.name.toLowerCase().includes('stick') || p.name.toLowerCase().includes('caps') || p.name.toLowerCase().includes('drink mix')));
-            
-            const numIntervals = Math.floor(distanceKm / 5); // Take something every 5 km
-            
-            // Separate caffeinated and non-caffeinated fuel
+            const numIntervals = Math.floor(distanceKm / 5);
             const caffFuel = fuelProducts.filter(p => p.caffeine > 0).sort((a,b) => a.caffeine - b.caffeine);
             const nonCaffFuel = fuelProducts.filter(p => p.caffeine === 0);
-
             for (let i = 1; i <= numIntervals; i++) {
                 const currentDist = i * 5;
-                if (currentDist > distanceKm - 4) break; // Don't fuel in the last 4km
-
+                if (currentDist > distanceKm - 4) break;
                 let productToTake = null;
-
-                // Logic to use caffeine earlier
-                if (i <= 2 && caffFuel.length > 0) { // Use caffeine in first two intervals if available
+                if (i <= 2 && caffFuel.length > 0) {
                     productToTake = caffFuel[(i-1) % caffFuel.length];
                 } else if (nonCaffFuel.length > 0) {
                     productToTake = nonCaffFuel[(i-1) % nonCaffFuel.length];
-                } else if (fuelProducts.length > 0) { // Fallback to any fuel
+                } else if (fuelProducts.length > 0) {
                     productToTake = fuelProducts[(i-1) % fuelProducts.length];
                 }
-
                 if (productToTake) {
                     nutritionPlan.push({ point: `${currentDist.toFixed(0)} km`, item: productToTake.name, serving: productToTake.serving });
                 }
             }
-
-            // Electrolyte planning (simple heuristic)
             if (electrolyteProducts.length > 0 && totalTimeHours > 2) {
                  const electrolyte = electrolyteProducts[0];
                  const midRunDist = Math.floor(distanceKm / 2);
                  nutritionPlan.push({ point: `~${midRunDist} km`, item: electrolyte.name, serving: electrolyte.serving });
                  nutritionPlan.sort((a,b) => parseFloat(a.point) - parseFloat(b.point));
             }
-            
             const waterRefills = Math.ceil(totalFluidNeeds / inputs.waterCapacity) - 1;
             const waterPlan = [];
             if (waterRefills > 0) {
@@ -469,78 +457,19 @@
                     waterPlan.push(`Refill your ${inputs.waterCapacity}ml bottle/flask around ${refillDistance.toFixed(1)} km.`);
                 }
             }
-            
-            // Start time
             const now = new Date();
-            const sunTimes = SunCalc.getTimes(now, coords ? coords.latitude : 40.71, coords ? coords.longitude : -74.00); // Default to NYC
+            const sunTimes = SunCalc.getTimes(now, coords ? coords.latitude : 40.71, coords ? coords.longitude : -74.00);
             const sunset = sunTimes.sunset;
             const latestStartTime = new Date(sunset.getTime() - totalTimeMinutes * 60000);
-
-            // Carb Loading
             const carbLoadingPlan = [];
             for (let i = 3; i > 0; i--) {
-                const carbs = (8 + (3-i)*2) * inputs.weight; // 8, 10, 12 g/kg
+                const carbs = (8 + (3-i)*2) * inputs.weight;
                 carbLoadingPlan.push(`<strong>Day ${4-i} before race:</strong> Aim for ${carbs.toFixed(0)}g of carbohydrates. Focus on simple carbs and reduce fiber.`);
             }
-
-            // Pacing
-             const easyPace = paceInMinutes * 1.1;
-             const targetPace = paceInMinutes;
-             const fastPace = paceInMinutes * 0.95;
-             const pacePlan = `
-                <li><strong>First 5km:</strong> Start easy, about 10% slower than target pace (~${(easyPace).toFixed(2).replace('.',':')} min/${inputs.unit}).</li>
-                <li><strong>5km to 35km:</strong> Settle into your target pace of ${inputs.pace} min/${inputs.unit}.</li>
-                <li><strong>Last 7km:</strong> If feeling good, increase effort slightly to ~${(fastPace).toFixed(2).replace('.',':')} min/${inputs.unit}.</li>
-             `;
-
-            // HTML Output
-            let html = `
-                <div class="space-y-6">
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Run Summary</h3>
-                        <p><strong>Total Estimated Time:</strong> ${Math.floor(totalTimeHours)}h ${Math.round(totalTimeMinutes % 60)}m</p>
-                        <p><strong>Latest Safe Start Time:</strong> <span class="text-red-600 font-bold">${latestStartTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span> to finish before sunset.</p>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Carb Loading Plan (3 Days Out)</h3>
-                        <ul class="list-disc list-inside space-y-1 mt-2">${carbLoadingPlan.map(item => `<li>${item}</li>`).join('')}</ul>
-                    </div>
-                     <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Pre-Run Plan (Morning of)</h3>
-                        <ul class="list-disc list-inside space-y-1 mt-2">
-                            <li><strong>3 hours before:</strong> Eat a high-carb, low-fiber meal (~100g carbs).</li>
-                            <li><strong>1-2 hours before:</strong> Drink 500ml of water or electrolyte drink.</li>
-                            <li><strong>15 mins before:</strong> Optional - take one energy gel.</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Mid-Run Nutrition & Hydration Plan</h3>
-                        <p class="text-sm text-gray-500">Drink small sips of water every 15-20 minutes.</p>
-                        <table class="min-w-full divide-y divide-gray-200 mt-2">
-                            <thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">Time / Distance</th><th class="px-4 py-2 text-left">Action</th></tr></thead>
-                            <tbody>
-                                ${nutritionPlan.map(p => `<tr><td class="px-4 py-2 font-medium">${p.point}</td><td class="px-4 py-2">Take ${p.serving} of <strong>${p.item}</strong></td></tr>`).join('')}
-                                ${waterPlan.map(p => `<tr><td class="px-4 py-2 font-medium text-blue-600">Water Stop</td><td class="px-4 py-2 text-blue-600">${p}</td></tr>`).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Pacing Strategy</h3>
-                        <ul class="list-disc list-inside space-y-1 mt-2">${pacePlan}</ul>
-                    </div>
-                     <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Post-Run Recovery</h3>
-                        <ul class="list-disc list-inside space-y-1 mt-2">
-                            <li><strong>Within 30 mins:</strong> Consume a mix of carbs and protein (3:1 ratio). A recovery shake or chocolate milk is ideal.</li>
-                            <li><strong>Throughout the day:</strong> Rehydrate with water and electrolytes. Eat a balanced meal.</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-semibold text-gray-700">Caffeine Warning</h3>
-                        <p>Monitor your total caffeine intake. This plan is based on your preference but listen to your body. High caffeine can cause jitters or stomach issues for some.</p>
-                    </div>
-                </div>
-            `;
+            const easyPace = paceInMinutes * 1.1;
+            const fastPace = paceInMinutes * 0.95;
+            const pacePlan = `<li><strong>First 5km:</strong> Start easy, about 10% slower than target pace (~${(easyPace).toFixed(2).replace('.',':')} min/${inputs.unit}).</li><li><strong>5km to 35km:</strong> Settle into your target pace of ${inputs.pace} min/${inputs.unit}.</li><li><strong>Last 7km:</strong> If feeling good, increase effort slightly to ~${(fastPace).toFixed(2).replace('.',':')} min/${inputs.unit}.</li>`;
+            let html = `<div><h3 class="text-xl font-semibold text-gray-700">Run Summary</h3><p><strong>Total Estimated Time:</strong> ${Math.floor(totalTimeHours)}h ${Math.round(totalTimeMinutes % 60)}m</p><p><strong>Latest Safe Start Time:</strong> <span class="text-red-600 font-bold">${latestStartTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span> to finish before sunset.</p></div><div><h3 class="text-xl font-semibold text-gray-700">Carb Loading Plan (3 Days Out)</h3><ul class="list-disc list-inside space-y-1 mt-2">${carbLoadingPlan.map(item => `<li>${item}</li>`).join('')}</ul></div><div><h3 class="text-xl font-semibold text-gray-700">Pre-Run Plan (Morning of)</h3><ul class="list-disc list-inside space-y-1 mt-2"><li><strong>3 hours before:</strong> Eat a high-carb, low-fiber meal (~100g carbs).</li><li><strong>1-2 hours before:</strong> Drink 500ml of water or electrolyte drink.</li><li><strong>15 mins before:</strong> Optional - take one energy gel.</li></ul></div><div><h3 class="text-xl font-semibold text-gray-700">Mid-Run Nutrition & Hydration Plan</h3><p class="text-sm text-gray-500">Drink small sips of water every 15-20 minutes.</p><table class="min-w-full divide-y divide-gray-200 mt-2"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">Time / Distance</th><th class="px-4 py-2 text-left">Action</th></tr></thead><tbody>${nutritionPlan.map(p => `<tr><td class="px-4 py-2 font-medium">${p.point}</td><td class="px-4 py-2">Take ${p.serving} of <strong>${p.item}</strong></td></tr>`).join('')}${waterPlan.map(p => `<tr><td class="px-4 py-2 font-medium text-blue-600">Water Stop</td><td class="px-4 py-2 text-blue-600">${p}</td></tr>`).join('')}</tbody></table></div><div><h3 class="text-xl font-semibold text-gray-700">Pacing Strategy</h3><ul class="list-disc list-inside space-y-1 mt-2">${pacePlan}</ul></div><div><h3 class="text-xl font-semibold text-gray-700">Post-Run Recovery</h3><ul class="list-disc list-inside space-y-1 mt-2"><li><strong>Within 30 mins:</strong> Consume a mix of carbs and protein (3:1 ratio). A recovery shake or chocolate milk is ideal.</li><li><strong>Throughout the day:</strong> Rehydrate with water and electrolytes. Eat a balanced meal.</li></ul></div><div><h3 class="text-xl font-semibold text-gray-700">Caffeine Warning</h3><p>Monitor your total caffeine intake. This plan is based on your preference but listen to your body. High caffeine can cause jitters or stomach issues for some.</p></div>`;
             return html;
         }
 
@@ -551,65 +480,50 @@
             const apiKey = inputs.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-            const productsString = inputs.products.map(p => 
-                `- ${p.name} (Carbs: ${p.carbs}g, Sodium: ${p.sodium}mg, Potassium: ${p.potassium}mg, Caffeine: ${p.caffeine}mg, Serving: ${p.serving})`
-            ).join('\n');
-
+            const productsString = inputs.products.map(p => `- ${p.name} (Carbs: ${p.carbs}g, Sodium: ${p.sodium}mg, Potassium: ${p.potassium}mg, Caffeine: ${p.caffeine}mg, Serving: ${p.serving})`).join('\n');
             const now = new Date();
-            const sunTimes = SunCalc.getTimes(now, coords ? coords.latitude : 40.71, coords ? coords.longitude : -74.00); // Default to NYC if no location
+            const sunTimes = SunCalc.getTimes(now, coords ? coords.latitude : 40.71, coords ? coords.longitude : -74.00);
             const sunset = sunTimes.sunset;
 
             const prompt = `
                 Act as an expert running coach creating a personalized marathon race plan. Here is the user's data:
-
-                **Runner Profile & Race Details:**
-                - Race Distance: ${inputs.distance} ${inputs.unit}
-                - Target Pace: ${inputs.pace} min/${inputs.unit}
-                - Runner's Weight: ${inputs.weight} kg
-                - Water Carrying Capacity: ${inputs.waterCapacity} ml
-                - Caffeine Preference: ${inputs.caffeinePref}
-
-                **Environmental Conditions:**
+                - Race Distance: ${inputs.distance} ${inputs.unit}, Target Pace: ${inputs.pace} min/${inputs.unit}
+                - Runner's Weight: ${inputs.weight} kg, Water Capacity: ${inputs.waterCapacity} ml, Caffeine Preference: ${inputs.caffeinePref}
                 - Location: ${inputs.location || 'Not provided. Assume New York City.'}
-                - Weather: ${inputs.weather ? `Temperature: ${inputs.weather.temp}°C, Humidity: ${inputs.weather.humidity}%` : 'Not available. Assume moderate conditions (15°C, 60% humidity).'}
-
-                **Available Nutrition Products:**
+                - Weather: ${inputs.weather ? `Temp: ${inputs.weather.temp}°C, Humidity: ${inputs.weather.humidity}%` : 'Not available. Assume moderate conditions.'}
+                - Available Nutrition:
                 ${productsString}
 
                 **Task:**
-                Generate a comprehensive, actionable race plan in HTML format. The plan should be easy to read and digest. Organize it into the following sections using h3 tags for titles and ul/li or tables for details:
-                1.  **Run Summary:** Calculate total run time. The local sunset time is ${sunset.toLocaleTimeString()}. Based on this, calculate the latest safe start time to finish the run 15 minutes before sunset.
-                2.  **Carb Loading Plan (3 Days):** Provide a simple day-by-day carb intake goal in grams based on the runner's weight.
-                3.  **Pre-Run Plan:** What and when to eat/drink on race morning.
-                4.  **Mid-Run Nutrition & Hydration Plan:** This is the most critical part. Create a detailed schedule table (Kilometer/Mile mark vs. Action). Follow these specific rules:
-                    - Plan for nutrition intake at intervals of approximately **every 5 kilometers** (or every 3 miles).
-                    - At each interval, recommend **only ONE** nutrition product (e.g., one gel OR one serving of chews). Do not suggest taking multiple items at the exact same time.
-                    - If the user has selected multiple types of fuel (gels/chews), **alternate between them** in the plan for variety.
-                    - If caffeinated products are selected, schedule them for the **earlier to middle parts of the run** (e.g., first half), not near the end.
-                    - **Do not schedule any nutrition intake within the last 5km** of the run.
-                    - Schedule water refill breaks based on their carrying capacity and estimated fluid loss. Remind them to sip water regularly between fuel stops.
-                5.  **Pacing Strategy:** Provide a simple 3-stage pacing plan (e.g., start, middle, end) with suggested paces relative to their target pace.
-                6.  **Post-Run Recovery:** Simple, actionable advice for the 30 minutes after finishing.
-                7.  **Caffeine Warning:** A brief, friendly warning about monitoring caffeine intake based on their preference.
+                Generate a comprehensive, actionable race plan in clean, mobile-friendly HTML.
+                **HTML Formatting Rules:**
+                - Wrap each logical section in a simple \`<div>\`.
+                - Use \`<h3 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">\` for section titles.
+                - Use \`<ul class="list-disc list-inside space-y-2 mt-2 pl-2">\` for lists.
+                - For the main nutrition schedule, use a responsive table: \`<table class="w-full text-sm text-left text-gray-500 mt-2"><thead class="text-xs text-gray-700 uppercase bg-gray-50">...\` and use standard \`tbody\`, \`tr\`, \`th\`, and \`td\` elements with padding.
+                
+                **Plan Sections & Logic:**
+                1.  **Run Summary:** Calculate total run time. The local sunset time is ${sunset.toLocaleTimeString()}. Calculate the latest safe start time to finish 15 minutes before sunset.
+                2.  **Carb Loading Plan (3 Days):** Simple day-by-day carb intake goal (g) based on runner's weight.
+                3.  **Pre-Run Plan:** What/when to eat/drink race morning.
+                4.  **Mid-Run Nutrition & Hydration Plan (Table):** Create a schedule (Kilometer/Mile vs. Action).
+                    - Intake at intervals of ~5 kilometers (or ~3 miles).
+                    - Recommend **ONE** product per interval.
+                    - **Alternate** between selected fuel types (gels/chews).
+                    - Schedule **caffeinated products in the first half** of the run.
+                    - **No nutrition in the last 5km**.
+                    - Schedule water refills based on capacity and estimated fluid loss.
+                5.  **Pacing Strategy:** A simple 3-stage pacing plan.
+                6.  **Post-Run Recovery:** Actionable advice for the 30 mins after finishing.
+                7.  **Caffeine Warning:** A brief, friendly warning.
 
-                Ensure the final output is only the HTML content for the plan, ready to be injected into a div. Do not include \`\`\`html or any markdown formatting.
+                Output only the raw HTML for the plan sections, ready to be injected into a div. Do not include \`\`\`html, \`<html>\`, or \`<head>\` tags.
             `;
 
             try {
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }] }],
-                };
-                
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.statusText}`);
-                }
-
+                const payload = { contents: [{ parts: [{ text: prompt }] }], };
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { throw new Error(`API Error: ${response.statusText}`); }
                 const result = await response.json();
                 const planHTML = result.candidates[0].content.parts[0].text;
                 displayPlan(planHTML);
@@ -617,7 +531,7 @@
             } catch (error) {
                 console.error("AI Plan Generation Error:", error);
                 el.loader.classList.add('hidden');
-                el.planContent.innerHTML = `<p class="text-red-500">Sorry, there was an error generating the AI plan. Please try the heuristic plan or check your connection.</p>`;
+                el.planContent.innerHTML = `<p class="text-red-500">Sorry, there was an error generating the AI plan. Please check your API key and connection. Error: ${error.message}</p>`;
             }
         }
         
@@ -629,11 +543,8 @@
             tempTextArea.select();
             document.execCommand('copy');
             document.body.removeChild(tempTextArea);
-
             el.copyMessage.classList.remove('hidden');
-            setTimeout(() => {
-                el.copyMessage.classList.add('hidden');
-            }, 2000);
+            setTimeout(() => { el.copyMessage.classList.add('hidden'); }, 2000);
         }
 
         // --- START THE APP ---
