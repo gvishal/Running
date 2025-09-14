@@ -474,8 +474,10 @@
         }
 
         async function generateAIPlan(inputs) {
-            el.loader.classList.remove('hidden');
+            el.planOutput.classList.remove('hidden');
             el.planContent.innerHTML = '';
+            el.loader.classList.remove('hidden');
+            el.planOutput.scrollIntoView({ behavior: 'smooth' });
             
             const apiKey = inputs.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
@@ -554,4 +556,5 @@
 
 </body>
 </html>
+
 
