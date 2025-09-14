@@ -240,7 +240,12 @@
         function init() {
             populateProducts();
             loadApiKey();
-            el.products.addEventListener('change', updateSelectedProductsTable);
+            loadUserSettings();
+
+            // Event listeners for saving user settings
+            const inputsToSave = [el.distance, el.unit, el.pace, el.weight, el.water, el.caffeine, el.location, el.products];
+            inputsToSave.forEach(input => input.addEventListener('change', saveUserSettings));
+
             el.getLocationBtn.addEventListener('click', getUserLocation);
             el.getWeatherBtn.addEventListener('click', fetchWeather);
             el.generateHeuristicBtn.addEventListener('click', () => generatePlan('heuristic'));
@@ -263,6 +268,45 @@
                 el.products.appendChild(option);
             });
         }
+        
+        // --- USER SETTINGS PERSISTENCE ---
+        function saveUserSettings() {
+             const settings = {
+                distance: el.distance.value,
+                unit: el.unit.value,
+                pace: el.pace.value,
+                weight: el.weight.value,
+                water: el.water.value,
+                caffeine: el.caffeine.value,
+                location: el.location.value,
+                selectedProducts: Array.from(el.products.selectedOptions).map(opt => opt.value)
+            };
+            localStorage.setItem('marathonUserSettings', JSON.stringify(settings));
+        }
+
+        function loadUserSettings() {
+            const savedSettings = localStorage.getItem('marathonUserSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                el.distance.value = settings.distance || '42.2';
+                el.unit.value = settings.unit || 'km';
+                el.pace.value = settings.pace || '7:30';
+                el.weight.value = settings.weight || '70';
+                el.water.value = settings.water || '600';
+                el.caffeine.value = settings.caffeine || 'medium';
+                el.location.value = settings.location || '';
+                
+                if (settings.selectedProducts && settings.selectedProducts.length > 0) {
+                    Array.from(el.products.options).forEach(option => {
+                        if (settings.selectedProducts.includes(option.value)) {
+                            option.selected = true;
+                        }
+                    });
+                }
+                updateSelectedProductsTable();
+            }
+        }
+
 
         // --- UI UPDATES ---
         function updateSelectedProductsTable() {
@@ -392,6 +436,8 @@
             if(apiKey){
                 localStorage.setItem('marathonPlannerApiKey', apiKey);
             }
+            
+            saveUserSettings(); // Save settings just before generating a plan
 
             const inputs = {
                 distance: parseFloat(el.distance.value),
@@ -556,5 +602,4 @@
 
 </body>
 </html>
-
 
